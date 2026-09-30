@@ -1,1 +1,874 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>クラウドPOSレジ - Firebase連携</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans JP', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                            900: '#14532d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+            background-color: #f8fafc;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        /* Custom Scrollbar for list items */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-800 flex flex-col antialiased selection:bg-brand-500 selection:text-white">
 
+    <!-- Application Header -->
+    <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <!-- Logo & App Name -->
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center shadow-md">
+                        <i class="fa-solid font-bold fa-cash-register text-white text-lg"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-lg font-bold tracking-wide leading-none">SmartPOS Cloud</h1>
+                        <span class="text-xs text-slate-400">GitHub Pages & Firebase レジシステム</span>
+                    </div>
+                </div>
+
+                <!-- User Profile & Auth Status -->
+                <div id="authHeaderContainer" class="flex items-center space-x-4">
+                    <div id="userProfile" class="hidden flex items-center space-x-3 bg-slate-800 py-1.5 px-3 rounded-full border border-slate-700">
+                        <img id="userAvatar" class="w-7 h-7 rounded-full border border-brand-500" src="" alt="User Avatar">
+                        <span id="userName" class="text-xs sm:text-sm font-medium text-slate-200 max-w-[120px] sm:max-w-[180px] truncate">ユーザー</span>
+                        <button id="logoutBtn" title="ログアウト" class="text-slate-400 hover:text-rose-400 transition ml-1 text-sm">
+                            <i class="fa-solid fa-right-from-bracket"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8">
+
+        <!-- Auth Gate: Displayed when logged out -->
+        <div id="loggedOutView" class="flex flex-col items-center justify-center py-16 px-4">
+            <div class="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-100 p-8 text-center space-y-6">
+                <div class="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto text-brand-600 text-3xl shadow-inner">
+                    <i class="fa-solid fa-store"></i>
+                </div>
+                <div class="space-y-2">
+                    <h2 class="text-2xl font-bold text-slate-900">POSレジへログイン</h2>
+                    <p class="text-slate-500 text-sm">Googleアカウントでログインして、売上記録や商品管理を開始できます。</p>
+                </div>
+                <button id="loginBtn" class="w-full flex items-center justify-center space-x-3 bg-white hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-xl border border-slate-300 shadow-sm transition active:scale-[0.98]">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24">
+                        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                    </svg>
+                    <span>Googleでログイン</span>
+                </button>
+                <div class="text-xs text-slate-400 pt-2 border-t border-slate-100">
+                    安全なFirebase Authenticationを利用しています。
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Application View (Logged In) -->
+        <div id="loggedInView" class="hidden space-y-6">
+
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-slate-200 space-x-2 sm:space-x-4 overflow-x-auto pb-1">
+                <button id="tabRegister" onclick="switchTab('register')" class="tab-btn active px-4 py-2.5 font-medium text-sm rounded-t-xl transition flex items-center space-x-2 text-brand-600 border-b-2 border-brand-600 bg-emerald-50/50">
+                    <i class="fa-solid fa-cash-register"></i>
+                    <span>レジ入力</span>
+                </button>
+                <button id="tabHistory" onclick="switchTab('history')" class="tab-btn px-4 py-2.5 font-medium text-sm text-slate-500 hover:text-slate-700 rounded-t-xl transition flex items-center space-x-2">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>販売履歴・集計</span>
+                </button>
+                <button id="tabMaster" onclick="switchTab('master')" class="tab-btn px-4 py-2.5 font-medium text-sm text-slate-500 hover:text-slate-700 rounded-t-xl transition flex items-center space-x-2">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                    <span>商品マスター</span>
+                </button>
+            </div>
+
+            <!-- TAB 1: REGISTER INPUT -->
+            <div id="viewRegister" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                <!-- Left Column: Input Form & Quick Master Select -->
+                <div class="lg:col-span-7 space-y-6">
+                    
+                    <!-- Quick Master Selection -->
+                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                                <i class="fa-solid fa-bolt text-amber-500 mr-1"></i> クイック商品選択
+                            </h3>
+                            <span class="text-xs text-slate-400">タップで入力補完</span>
+                        </div>
+                        <div id="quickMasterContainer" class="flex flex-wrap gap-2 max-h-36 overflow-y-auto p-1">
+                            <!-- Quick buttons populated dynamically -->
+                            <span class="text-xs text-slate-400 py-2">登録されているマスター商品がありません</span>
+                        </div>
+                    </div>
+
+                    <!-- Input Form Card -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+                        <h2 class="text-lg font-bold text-slate-800 flex items-center border-b border-slate-100 pb-3">
+                            <i class="fa-solid fa-cart-plus text-brand-600 mr-2"></i> 販売データ入力
+                        </h2>
+
+                        <form id="saleForm" class="space-y-4" onsubmit="handleSaleSubmit(event)">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <!-- 商品名 -->
+                                <div class="sm:col-span-2">
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">商品名 <span class="text-rose-500">*</span></label>
+                                    <input type="text" id="itemName" required placeholder="例: コーヒー、りんご" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-sm">
+                                </div>
+
+                                <!-- 単価 -->
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">単価 (円) <span class="text-rose-500">*</span></label>
+                                    <div class="relative">
+                                        <span class="absolute left-3.5 top-2.5 text-slate-400 text-sm">¥</span>
+                                        <input type="number" id="unitPrice" required min="0" placeholder="0" oninput="calculateTotal()" class="w-full pl-8 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-sm">
+                                    </div>
+                                </div>
+
+                                <!-- 個数 -->
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">個数 <span class="text-rose-500">*</span></label>
+                                    <div class="flex space-x-2">
+                                        <input type="number" id="quantity" required min="1" value="1" oninput="calculateTotal()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-sm">
+                                        <!-- Quick Quantity Buttons -->
+                                        <div class="flex space-x-1">
+                                            <button type="button" onclick="adjustQty(1)" class="px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl font-bold transition text-sm">+1</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 日付 -->
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">日付 <span class="text-rose-500">*</span></label>
+                                    <input type="date" id="saleDate" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-sm">
+                                </div>
+
+                                <!-- メモ -->
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-600 mb-1">メモ</label>
+                                    <input type="text" id="memo" placeholder="例: クーポン適用, 持ち帰り" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition text-sm">
+                                </div>
+                            </div>
+
+                            <!-- Buttons -->
+                            <div class="pt-2 flex items-center justify-end space-x-3">
+                                <button type="button" onclick="resetSaleForm()" class="px-4 py-2.5 text-slate-500 hover:bg-slate-100 rounded-xl text-sm font-medium transition">
+                                    クリア
+                                </button>
+                                <button type="submit" id="submitSaleBtn" class="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold shadow-md shadow-brand-500/20 transition active:scale-[0.98] flex items-center space-x-2">
+                                    <i class="fa-solid fa-floppy-disk"></i>
+                                    <span>登録・保存</span>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Right Column: Live Payment Summary Panel -->
+                <div class="lg:col-span-5">
+                    <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-3xl shadow-xl space-y-6 sticky top-20 border border-slate-700">
+                        <div class="flex justify-between items-center border-b border-slate-700/80 pb-4">
+                            <span class="text-xs uppercase tracking-widest text-emerald-400 font-bold">Checkout Summary</span>
+                            <span id="liveClock" class="text-xs text-slate-400 font-mono">00:00:00</span>
+                        </div>
+
+                        <!-- Main Item Preview -->
+                        <div class="space-y-3 min-h-[120px] flex flex-col justify-center">
+                            <div class="text-xs text-slate-400">選択中の商品</div>
+                            <div id="previewName" class="text-xl font-bold text-slate-100 truncate">未入力</div>
+                            <div class="flex justify-between items-baseline text-sm text-slate-300 pt-2 border-t border-slate-800">
+                                <span>内訳:</span>
+                                <span><span id="previewUnitPrice">¥0</span> × <span id="previewQty">0</span>個</span>
+                            </div>
+                        </div>
+
+                        <!-- Memo Preview -->
+                        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700/50">
+                            <div class="text-xs text-slate-400 mb-1">メモ:</div>
+                            <div id="previewMemo" class="text-xs text-slate-300 italic min-h-[1.25rem]">なし</div>
+                        </div>
+
+                        <!-- Grand Total Display -->
+                        <div class="pt-4 border-t border-slate-700 space-y-1">
+                            <div class="text-xs text-slate-400 text-right">小計 (税込)</div>
+                            <div class="text-3xl sm:text-4xl font-extrabold text-right text-emerald-400 font-mono tracking-tight" id="previewTotal">
+                                ¥0
+                            </div>
+                        </div>
+
+                        <!-- Quick Save Helper Info -->
+                        <div class="text-xs text-slate-400 text-center bg-slate-800/40 py-2 rounded-lg">
+                            <i class="fa-solid fa-circle-info text-brand-500 mr-1"></i> 保存ボタンを押すとFirestoreへ自動記録されます
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: SALES HISTORY & STATS -->
+            <div id="viewHistory" class="hidden space-y-6">
+
+                <!-- Filter & Summary Bar -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <!-- Date Filter -->
+                        <div class="flex items-center space-x-2">
+                            <label class="text-xs font-semibold text-slate-500 whitespace-nowrap">日付絞り込み:</label>
+                            <input type="date" id="filterDate" onchange="renderHistoryTable()" class="px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                            <button onclick="clearDateFilter()" class="text-xs text-slate-500 hover:text-slate-700 underline px-1">全期間</button>
+                        </div>
+
+                        <!-- Search Box -->
+                        <div class="relative w-full sm:w-64">
+                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
+                            <input type="text" id="searchKeyword" oninput="renderHistoryTable()" placeholder="商品名・メモで検索..." class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500/20">
+                        </div>
+
+                        <!-- Export CSV -->
+                        <div>
+                            <button onclick="exportCSV()" class="w-full sm:w-auto px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg text-xs font-medium transition flex items-center justify-center space-x-1.5">
+                                <i class="fa-solid fa-file-csv text-emerald-400"></i>
+                                <span>CSV出力</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t border-slate-100">
+                        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                            <div class="text-xs text-slate-400 font-medium">該当期間 総売上</div>
+                            <div id="statTotalAmount" class="text-xl font-bold text-slate-800 font-mono">¥0</div>
+                        </div>
+                        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                            <div class="text-xs text-slate-400 font-medium">総販売個数</div>
+                            <div id="statTotalQuantity" class="text-xl font-bold text-slate-800 font-mono">0 個</div>
+                        </div>
+                        <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                            <div class="text-xs text-slate-400 font-medium">取引件数</div>
+                            <div id="statCount" class="text-xl font-bold text-slate-800 font-mono">0 件</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sales History Table -->
+                <div class="bg-white rounded-2xl shadow-sm border border-slate-200/80 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 text-slate-500 text-xs border-b border-slate-200">
+                                    <th class="p-3.5 font-semibold">日付</th>
+                                    <th class="p-3.5 font-semibold">商品名</th>
+                                    <th class="p-3.5 font-semibold text-right">単価</th>
+                                    <th class="p-3.5 font-semibold text-center">個数</th>
+                                    <th class="p-3.5 font-semibold text-right">小計</th>
+                                    <th class="p-3.5 font-semibold">メモ</th>
+                                    <th class="p-3.5 font-semibold text-center">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody" class="divide-y divide-slate-100 text-sm text-slate-700">
+                                <!-- Dynamic rows -->
+                                <tr>
+                                    <td colspan="7" class="text-center py-8 text-slate-400 text-xs">データ読み込み中...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 3: ITEM MASTER MANAGEMENT -->
+            <div id="viewMaster" class="grid grid-cols-1 md:grid-cols-12 gap-6">
+
+                <!-- Master Item Creation Form -->
+                <div class="md:col-span-5 bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+                    <h3 class="text-base font-bold text-slate-800 flex items-center border-b border-slate-100 pb-3">
+                        <i class="fa-solid fa-plus-circle text-brand-600 mr-2"></i> 商品マスター登録
+                    </h3>
+                    <form id="masterForm" onsubmit="handleMasterSubmit(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">商品名 <span class="text-rose-500">*</span></label>
+                            <input type="text" id="masterName" required placeholder="例: カフェラテ" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">デフォルト単価 (円) <span class="text-rose-500">*</span></label>
+                            <input type="number" id="masterPrice" required min="0" placeholder="450" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 text-sm">
+                        </div>
+                        <button type="submit" class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-sm transition">
+                            マスターに登録
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Master Item List -->
+                <div class="md:col-span-7 bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 space-y-4">
+                    <h3 class="text-base font-bold text-slate-800 border-b border-slate-100 pb-3">
+                        登録済みマスター一覧
+                    </h3>
+                    <div id="masterListContainer" class="space-y-2 max-h-96 overflow-y-auto">
+                        <!-- Dynamic list -->
+                        <div class="text-xs text-slate-400 py-4 text-center">読み込み中...</div>
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- Custom Modal Dialog (Replaces alert and confirm) -->
+    <div id="customModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white max-w-sm sm:max-w-md w-full rounded-2xl shadow-2xl p-6 space-y-4 border border-slate-100">
+            <div class="flex items-center space-x-3 text-slate-800">
+                <div id="modalIcon" class="w-10 h-10 rounded-full bg-emerald-100 text-brand-600 flex items-center justify-center flex-shrink-0 text-lg">
+                    <i class="fa-solid fa-circle-info"></i>
+                </div>
+                <h3 id="modalTitle" class="font-bold text-base">確認</h3>
+            </div>
+            <p id="modalMessage" class="text-sm text-slate-600 whitespace-pre-line leading-relaxed">メッセージ内容がここに入ります。</p>
+            <div class="flex justify-end space-x-2 pt-2" id="modalActions">
+                <button id="modalOkBtn" onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-medium transition">
+                    OK
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase Script (v11.6.1 Module) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            GoogleAuthProvider, 
+            signInWithPopup, 
+            signOut, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            deleteDoc, 
+            doc, 
+            onSnapshot, 
+            query, 
+            serverTimestamp 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Provided Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyCmAaDnN8P5WcWTzDujuQJ6SxrBaNFB1vQ",
+            authDomain: "tesuto-52d22.firebaseapp.com",
+            projectId: "tesuto-52d22",
+            storageBucket: "tesuto-52d22.firebasestorage.app",
+            messagingSenderId: "244173853599",
+            appId: "1:244173853599:web:6b17c169e20bab4e03e3aa"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        // Application State
+        let currentUser = null;
+        let salesData = [];
+        let masterItems = [];
+        let salesUnsubscribe = null;
+        let masterUnsubscribe = null;
+
+        // Set default date to today
+        document.getElementById('saleDate').value = new Date().toISOString().split('T')[0];
+
+        // Auth Observer
+        onAuthStateChanged(auth, (user) => {
+            currentUser = user;
+            if (user) {
+                // Logged In State UI
+                document.getElementById('loggedOutView').classList.add('hidden');
+                document.getElementById('loggedInView').classList.remove('hidden');
+                document.getElementById('userProfile').classList.remove('hidden');
+                
+                document.getElementById('userAvatar').src = user.photoURL || 'https://via.placeholder.com/40';
+                document.getElementById('userName').textContent = user.displayName || user.email || 'ユーザー';
+
+                // Listen to Firestore updates for this user
+                subscribeToUserData(user.uid);
+            } else {
+                // Logged Out State UI
+                document.getElementById('loggedOutView').classList.remove('hidden');
+                document.getElementById('loggedInView').classList.add('hidden');
+                document.getElementById('userProfile').classList.add('hidden');
+
+                // Cleanup listeners
+                if (salesUnsubscribe) salesUnsubscribe();
+                if (masterUnsubscribe) masterUnsubscribe();
+                salesData = [];
+                masterItems = [];
+            }
+        });
+
+        // Google Login Action
+        document.getElementById('loginBtn').addEventListener('click', async () => {
+            try {
+                await signInWithPopup(auth, googleProvider);
+            } catch (error) {
+                console.error("Login error:", error);
+                
+                // Specific error handling for unauthorized domains (Firebase Security setting)
+                if (error.code === 'auth/unauthorized-domain') {
+                    const currentDomain = window.location.hostname || '現在のドメイン';
+                    showCustomModal(
+                        "承認されていないドメインです",
+                        `Firebase Consoleの承認済みドメイン設定に、現在のドメイン (${currentDomain}) が登録されていないためログインできません。\n\n【解決方法】\n1. Firebase Console (https://console.firebase.google.com/) を開く\n2. プロジェクト「tesuto-52d22」を選択\n3. 左メニュー「Authentication」→「設定 (Settings)」タブを開く\n4.「承認済みドメイン (Authorized domains)」で「ドメインの追加」をクリック\n5. 「${currentDomain}」を入力して保存してください。`
+                    );
+                } else {
+                    showCustomModal("ログインエラー", "Googleでログインに失敗しました: " + error.message);
+                }
+            }
+        });
+
+        // Logout Action
+        document.getElementById('logoutBtn').addEventListener('click', async () => {
+            try {
+                await signOut(auth);
+            } catch (error) {
+                console.error("Logout error:", error);
+            }
+        });
+
+        // Firestore Realtime Subscription (Rule compliant strict pathing)
+        function subscribeToUserData(uid) {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'tesuto-pos-app';
+
+            // Sales Collection Path
+            const salesColRef = collection(db, 'artifacts', appId, 'users', uid, 'sales');
+            salesUnsubscribe = onSnapshot(query(salesColRef), (snapshot) => {
+                salesData = [];
+                snapshot.forEach((doc) => {
+                    salesData.push({ id: doc.id, ...doc.data() });
+                });
+                // Memory side sort by date descending
+                salesData.sort((a, b) => new Date(b.date + 'T' + (b.createdAt || '00:00')) - new Date(a.date + 'T' + (a.createdAt || '00:00')));
+                renderHistoryTable();
+            }, (error) => {
+                console.error("Sales snapshot error:", error);
+            });
+
+            // Master Items Collection Path
+            const masterColRef = collection(db, 'artifacts', appId, 'users', uid, 'masters');
+            masterUnsubscribe = onSnapshot(query(masterColRef), (snapshot) => {
+                masterItems = [];
+                snapshot.forEach((doc) => {
+                    masterItems.push({ id: doc.id, ...doc.data() });
+                });
+                renderMasterList();
+                renderQuickMasterButtons();
+            }, (error) => {
+                console.error("Master snapshot error:", error);
+            });
+        }
+
+        // Submit Sale Record
+        window.handleSaleSubmit = async function(e) {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const name = document.getElementById('itemName').value.trim();
+            const price = parseFloat(document.getElementById('unitPrice').value) || 0;
+            const qty = parseInt(document.getElementById('quantity').value, 10) || 1;
+            const date = document.getElementById('saleDate').value;
+            const memo = document.getElementById('memo').value.trim();
+
+            if (!name || isNaN(price) || isNaN(qty) || !date) {
+                showCustomModal("入力エラー", "必須項目を正しく入力してください。");
+                return;
+            }
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'tesuto-pos-app';
+            const salesColRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'sales');
+
+            try {
+                await addDoc(salesColRef, {
+                    itemName: name,
+                    unitPrice: price,
+                    quantity: qty,
+                    subtotal: price * qty,
+                    date: date,
+                    memo: memo,
+                    createdAt: new Date().toISOString()
+                });
+
+                showCustomModal("登録完了", `「${name}」の販売データを保存しました！`, "success");
+                resetSaleForm();
+            } catch (err) {
+                console.error("Error adding sale:", err);
+                showCustomModal("保存失敗", "販売データの保存中にエラーが発生しました。");
+            }
+        };
+
+        // Submit Master Item
+        window.handleMasterSubmit = async function(e) {
+            e.preventDefault();
+            if (!currentUser) return;
+
+            const name = document.getElementById('masterName').value.trim();
+            const price = parseFloat(document.getElementById('masterPrice').value) || 0;
+
+            if (!name || isNaN(price)) return;
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'tesuto-pos-app';
+            const masterColRef = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'masters');
+
+            try {
+                await addDoc(masterColRef, {
+                    itemName: name,
+                    unitPrice: price,
+                    createdAt: new Date().toISOString()
+                });
+
+                document.getElementById('masterName').value = '';
+                document.getElementById('masterPrice').value = '';
+            } catch (err) {
+                console.error("Error adding master item:", err);
+                showCustomModal("保存失敗", "マスター商品の登録中にエラーが発生しました。");
+            }
+        };
+
+        // Delete Master Item
+        window.deleteMasterItem = function(id, name) {
+            showConfirmModal("マスター削除", `「${name}」をマスターから削除しますか？`, async () => {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'tesuto-pos-app';
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'masters', id));
+                } catch (err) {
+                    console.error("Delete master error:", err);
+                }
+            });
+        };
+
+        // Delete Sale Record
+        window.deleteSaleItem = function(id, name) {
+            showConfirmModal("履歴の削除", `「${name}」の取引データを削除しますか？`, async () => {
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'tesuto-pos-app';
+                try {
+                    await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'sales', id));
+                } catch (err) {
+                    console.error("Delete sale error:", err);
+                }
+            });
+        };
+
+        // Render Master Items in Tab 3
+        function renderMasterList() {
+            const container = document.getElementById('masterListContainer');
+            if (masterItems.length === 0) {
+                container.innerHTML = '<div class="text-xs text-slate-400 py-6 text-center">マスター商品が未登録です</div>';
+                return;
+            }
+
+            container.innerHTML = masterItems.map(item => `
+                <div class="flex items-center justify-between p-3 rounded-xl bg-slate-50 hover:bg-slate-100 transition border border-slate-100">
+                    <div>
+                        <div class="font-bold text-slate-800 text-sm">${escapeHtml(item.itemName)}</div>
+                        <div class="text-xs text-slate-500 font-mono">¥${item.unitPrice.toLocaleString()}</div>
+                    </div>
+                    <button onclick="deleteMasterItem('${item.id}', '${escapeHtml(item.itemName)}')" class="text-slate-400 hover:text-rose-500 transition px-2 py-1 text-sm">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        // Render Quick Buttons in Tab 1
+        function renderQuickMasterButtons() {
+            const container = document.getElementById('quickMasterContainer');
+            if (masterItems.length === 0) {
+                container.innerHTML = '<span class="text-xs text-slate-400 py-2">商品マスターから追加すると、ここにクイックボタンが表示されます</span>';
+                return;
+            }
+
+            container.innerHTML = masterItems.map(item => `
+                <button type="button" onclick="selectQuickMaster('${escapeHtml(item.itemName)}', ${item.unitPrice})" class="px-3 py-1.5 bg-slate-100 hover:bg-brand-50 hover:text-brand-700 hover:border-brand-200 border border-slate-200 text-slate-700 rounded-lg text-xs font-medium transition flex items-center space-x-1 shadow-sm active:scale-95">
+                    <span>${escapeHtml(item.itemName)}</span>
+                    <span class="text-slate-400 font-mono text-[10px]">¥${item.unitPrice}</span>
+                </button>
+            `).join('');
+        }
+
+        // Quick Select Preset Fill
+        window.selectQuickMaster = function(name, price) {
+            document.getElementById('itemName').value = name;
+            document.getElementById('unitPrice').value = price;
+            calculateTotal();
+        };
+
+        // Render History Table & Compute Statistics
+        window.renderHistoryTable = function() {
+            const dateFilter = document.getElementById('filterDate').value;
+            const searchKeyword = document.getElementById('searchKeyword').value.trim().toLowerCase();
+
+            const tbody = document.getElementById('historyTableBody');
+
+            // Filter logic
+            let filtered = salesData.filter(item => {
+                let matchDate = !dateFilter || item.date === dateFilter;
+                let matchKeyword = !searchKeyword || 
+                    (item.itemName && item.itemName.toLowerCase().includes(searchKeyword)) ||
+                    (item.memo && item.memo.toLowerCase().includes(searchKeyword));
+                return matchDate && matchKeyword;
+            });
+
+            // Update Statistics
+            let totalAmt = 0;
+            let totalQty = 0;
+            filtered.forEach(i => {
+                totalAmt += (i.subtotal || (i.unitPrice * i.quantity));
+                totalQty += (i.quantity || 0);
+            });
+
+            document.getElementById('statTotalAmount').textContent = '¥' + totalAmt.toLocaleString();
+            document.getElementById('statTotalQuantity').textContent = totalQty.toLocaleString() + ' 個';
+            document.getElementById('statCount').textContent = filtered.length.toLocaleString() + ' 件';
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-8 text-slate-400 text-xs">該当する販売履歴はありません</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = filtered.map(item => {
+                const subtotal = item.subtotal || (item.unitPrice * item.quantity);
+                return `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3.5 text-xs font-mono text-slate-500">${escapeHtml(item.date)}</td>
+                        <td class="p-3.5 font-medium text-slate-800">${escapeHtml(item.itemName)}</td>
+                        <td class="p-3.5 text-right font-mono text-xs">¥${(item.unitPrice || 0).toLocaleString()}</td>
+                        <td class="p-3.5 text-center font-mono text-xs">${item.quantity || 0}</td>
+                        <td class="p-3.5 text-right font-mono font-bold text-slate-900">¥${subtotal.toLocaleString()}</td>
+                        <td class="p-3.5 text-xs text-slate-500 max-w-[150px] truncate">${escapeHtml(item.memo || '-')}</td>
+                        <td class="p-3.5 text-center">
+                            <button onclick="deleteSaleItem('${item.id}', '${escapeHtml(item.itemName)}')" class="text-slate-400 hover:text-rose-500 transition px-2 py-1">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        };
+
+        // Form Calculation & Preview Updater
+        window.calculateTotal = function() {
+            const name = document.getElementById('itemName').value.trim();
+            const price = parseFloat(document.getElementById('unitPrice').value) || 0;
+            const qty = parseInt(document.getElementById('quantity').value, 10) || 0;
+            const memo = document.getElementById('memo').value.trim();
+
+            const total = price * qty;
+
+            document.getElementById('previewName').textContent = name || '未入力';
+            document.getElementById('previewUnitPrice').textContent = '¥' + price.toLocaleString();
+            document.getElementById('previewQty').textContent = qty;
+            document.getElementById('previewMemo').textContent = memo || 'なし';
+            document.getElementById('previewTotal').textContent = '¥' + total.toLocaleString();
+        };
+
+        // Attach input listener for live calculation
+        document.getElementById('itemName').addEventListener('input', calculateTotal);
+        document.getElementById('memo').addEventListener('input', calculateTotal);
+
+        window.adjustQty = function(delta) {
+            const input = document.getElementById('quantity');
+            let current = parseInt(input.value, 10) || 1;
+            input.value = Math.max(1, current + delta);
+            calculateTotal();
+        };
+
+        window.resetSaleForm = function() {
+            document.getElementById('saleForm').reset();
+            document.getElementById('saleDate').value = new Date().toISOString().split('T')[0];
+            calculateTotal();
+        };
+
+        window.clearDateFilter = function() {
+            document.getElementById('filterDate').value = '';
+            renderHistoryTable();
+        };
+
+        // CSV Export Functionality
+        window.exportCSV = function() {
+            if (salesData.length === 0) {
+                showCustomModal("情報", "出力するデータが存在しません。");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+            csvContent += "日付,商品名,単価,個数,小計,メモ\n";
+
+            salesData.forEach(row => {
+                const subtotal = row.subtotal || (row.unitPrice * row.quantity);
+                const line = `"${row.date}","${(row.itemName || '').replace(/"/g, '""')}",${row.unitPrice || 0},${row.quantity || 0},${subtotal},"${(row.memo || '').replace(/"/g, '""')}"`;
+                csvContent += line + "\n";
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `sales_export_${new Date().toISOString().split('T')[0]}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        };
+
+        // Tab Switching Logic
+        window.switchTab = function(tabName) {
+            const tabs = ['register', 'history', 'master'];
+            tabs.forEach(t => {
+                const btn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+                const view = document.getElementById('view' + t.charAt(0).toUpperCase() + t.slice(1));
+                
+                if (t === tabName) {
+                    btn.classList.add('active', 'text-brand-600', 'border-b-2', 'border-brand-600', 'bg-emerald-50/50');
+                    btn.classList.remove('text-slate-500');
+                    view.classList.remove('hidden');
+                } else {
+                    btn.classList.remove('active', 'text-brand-600', 'border-b-2', 'border-brand-600', 'bg-emerald-50/50');
+                    btn.classList.add('text-slate-500');
+                    view.classList.add('hidden');
+                }
+            });
+        };
+
+        // Utility: Escape HTML to prevent XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Modal UI Helpers
+        window.showCustomModal = function(title, message, type = 'info') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            
+            const iconEl = document.getElementById('modalIcon');
+            if (type === 'success') {
+                iconEl.className = "w-10 h-10 rounded-full bg-emerald-100 text-brand-600 flex items-center justify-center flex-shrink-0 text-lg";
+                iconEl.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+            } else {
+                iconEl.className = "w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0 text-lg";
+                iconEl.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+            }
+
+            document.getElementById('modalActions').innerHTML = `
+                <button onclick="closeModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-medium transition">
+                    OK
+                </button>
+            `;
+            document.getElementById('customModal').classList.remove('hidden');
+        };
+
+        window.showConfirmModal = function(title, message, onConfirm) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalMessage').textContent = message;
+            
+            const iconEl = document.getElementById('modalIcon');
+            iconEl.className = "w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 text-lg";
+            iconEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+
+            window._confirmAction = onConfirm;
+
+            document.getElementById('modalActions').innerHTML = `
+                <button onclick="closeModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-xl text-sm font-medium transition">
+                    キャンセル
+                </button>
+                <button onclick="executeConfirm()" class="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-medium transition">
+                    実行する
+                </button>
+            `;
+            document.getElementById('customModal').classList.remove('hidden');
+        };
+
+        window.executeConfirm = function() {
+            if (window._confirmAction) {
+                window._confirmAction();
+                window._confirmAction = null;
+            }
+            closeModal();
+        };
+
+        window.closeModal = function() {
+            document.getElementById('customModal').classList.add('hidden');
+        };
+
+        // Live Clock Updates
+        setInterval(() => {
+            const clock = document.getElementById('liveClock');
+            if (clock) {
+                const now = new Date();
+                clock.textContent = now.toTimeString().split(' ')[0];
+            }
+        }, 1000);
+
+    </script>
+</body>
+</html>
